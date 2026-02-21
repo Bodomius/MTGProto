@@ -5,7 +5,6 @@ ALIAS_NAME="gotelegram"
 BINARY_PATH="/usr/local/bin/gotelegram"
 CONTAINER_NAME="MTGProto"
 
-# --- ТВОИ ЦВЕТА ---
 RED='\033[0;31m'
 GREEN='\033[38;2;22;255;0m'      # #16ff00
 BLUE='\033[38;2;15;139;253m'     # #0f8bfd
