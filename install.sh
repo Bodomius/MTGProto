@@ -3,6 +3,7 @@
 # --- КОНФИГУРАЦИЯ ---
 ALIAS_NAME="gotelegram"
 BINARY_PATH="/usr/local/bin/gotelegram"
+CONTAINER_NAME="MTGProto"
 
 # --- ТВОИ ЦВЕТА ---
 RED='\033[0;31m'
@@ -40,14 +41,14 @@ get_ip() {
 
 # --- ПОКАЗАТЬ КОНФИГУРАЦИЮ ---
 show_config() {
-    if ! docker ps | grep -q "mtproto-proxy"; then 
+    if ! docker ps | grep -q "$CONTAINER_NAME"; then 
         echo -e "${RED}Прокси не запущен${NC}"
         return 1
     fi
     
-    SECRET=$(docker inspect mtproto-proxy --format='{{range .Config.Cmd}}{{.}} {{end}}' | awk '{print $NF}')
+    SECRET=$(docker inspect "$CONTAINER_NAME" --format='{{range .Config.Cmd}}{{.}} {{end}}' | awk '{print $NF}')
     IP=$(get_ip)
-    PORT=$(docker inspect mtproto-proxy --format='{{range $p, $conf := .HostConfig.PortBindings}}{{(index $conf 0).HostPort}}{{end}}' 2>/dev/null)
+    PORT=$(docker inspect "$CONTAINER_NAME" --format='{{range $p, $conf := .HostConfig.PortBindings}}{{(index $conf 0).HostPort}}{{end}}' 2>/dev/null)
     PORT=${PORT:-443}
     LINK="tg://proxy?server=$IP&port=$PORT&secret=$SECRET"
 
@@ -113,12 +114,12 @@ menu_install() {
     echo -e "\n${GREEN}Настройка прокси...${NC}"
     SECRET=$(docker run --rm nineseconds/mtg:2 generate-secret --hex "$DOMAIN")
     
-    # Остановка старого контейнера
-    docker stop mtproto-proxy &>/dev/null && docker rm mtproto-proxy &>/dev/null
+    # Остановка старого контейнера если есть
+    docker stop "$CONTAINER_NAME" &>/dev/null && docker rm "$CONTAINER_NAME" &>/dev/null
     
-    # Запуск нового (оригинальная рабочая команда)
+    # Запуск нового
     docker run -d \
-        --name mtproto-proxy \
+        --name "$CONTAINER_NAME" \
         --restart always \
         -p "$PORT":"$PORT" \
         nineseconds/mtg:2 simple-run \
@@ -140,8 +141,16 @@ menu_install() {
 # --- УДАЛЕНИЕ ПРОКСИ ---
 remove_proxy() {
     echo -e "${RED}Удаление прокси...${NC}"
-    docker stop mtproto-proxy &>/dev/null && docker rm mtproto-proxy &>/dev/null
+    docker stop "$CONTAINER_NAME" &>/dev/null && docker rm "$CONTAINER_NAME" &>/dev/null
     echo -e "${GREEN}Прокси удален${NC}"
+    read -p "$(echo -e ${YELLOW}Нажмите Enter...${NC})"
+}
+
+# --- ПЕРЕЗАПУСК ПРОКСИ ---
+restart_proxy() {
+    echo -e "${YELLOW}Перезапуск прокси...${NC}"
+    docker restart "$CONTAINER_NAME" &>/dev/null
+    echo -e "${GREEN}Готово${NC}"
     read -p "$(echo -e ${YELLOW}Нажмите Enter...${NC})"
 }
 
@@ -150,7 +159,7 @@ main_menu() {
     while true; do
         clear
         echo -e "${GREEN}╔════════════════════════════════╗${NC}"
-        echo -e "${GREEN}║    MTProto Proxy Manager       ║${NC}"
+        echo -e "${GREEN}║       MTGProto Manager         ║${NC}"
         echo -e "${GREEN}╚════════════════════════════════╝${NC}"
         echo ""
         echo -e "${YELLOW}1)${NC} Установить прокси"
@@ -168,12 +177,7 @@ main_menu() {
                 show_config
                 read -p "$(echo -e ${YELLOW}Нажмите Enter...${NC})"
                 ;;
-            3)
-                echo -e "${YELLOW}Перезапуск прокси...${NC}"
-                docker restart mtproto-proxy &>/dev/null
-                echo -e "${GREEN}Готово${NC}"
-                read -p "$(echo -e ${YELLOW}Нажмите Enter...${NC})"
-                ;;
+            3) restart_proxy ;;
             4) remove_proxy ;;
             0) 
                 echo -e "${YELLOW}Выход${NC}"
