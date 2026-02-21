@@ -159,7 +159,7 @@ main_menu() {
     while true; do
         clear
         echo -e "${GREEN}╔════════════════════════════════╗${NC}"
-        echo -e "${GREEN}║       MTGProto Manager         ║${NC}"
+        echo -e "${GREEN}║     Bodom MTGProto Manager     ║${NC}"
         echo -e "${GREEN}╚════════════════════════════════╝${NC}"
         echo ""
         echo -e "${YELLOW}1)${NC} Установить прокси"
