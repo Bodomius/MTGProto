@@ -81,7 +81,9 @@ menu_install() {
     done
     echo ""
     
-    read -p "$(echo -e ${YELLOW}Ваш выбор [1-20]: ${NC})" d_idx
+    # Исправлено: убрана вложенная подстановка
+    echo -ne "${YELLOW}Ваш выбор [1-20]: ${NC}"
+    read d_idx
     DOMAIN=${domains[$((d_idx-1))]}
     DOMAIN=${DOMAIN:-google.com}
 
@@ -90,21 +92,27 @@ menu_install() {
     echo -e "1) 443 (рекомендуется)"
     echo -e "2) 8443"
     echo -e "3) Свой порт"
-    read -p "$(echo -e ${YELLOW}Выбор: ${NC})" p_choice
+    echo -ne "${YELLOW}Выбор: ${NC}"
+    read p_choice
     
     case $p_choice in
         2) PORT=8443 ;;
-        3) read -p "$(echo -e ${YELLOW}Введите порт: ${NC})" PORT ;;
+        3) 
+            echo -ne "${YELLOW}Введите порт: ${NC}"
+            read PORT
+            ;;
         *) PORT=443 ;;
     esac
 
     # Проверка порта
     if ss -tuln | grep -q ":$PORT "; then
         echo -e "${RED}Внимание! Порт $PORT уже занят!${NC}"
-        read -p "$(echo -e ${YELLOW}Продолжить всё равно? (y/n): ${NC})" force
+        echo -ne "${YELLOW}Продолжить всё равно? (y/n): ${NC}"
+        read force
         if [ "$force" != "y" ]; then
             echo -e "${YELLOW}Отмена установки${NC}"
-            read -p "$(echo -e ${YELLOW}Нажмите Enter...${NC})"
+            echo -ne "${YELLOW}Нажмите Enter...${NC}"
+            read
             return
         fi
     fi
@@ -134,7 +142,8 @@ menu_install() {
         echo -e "${RED}Ошибка при установке прокси${NC}"
     fi
     
-    read -p "$(echo -e ${YELLOW}Нажмите Enter для продолжения...${NC})"
+    echo -ne "${YELLOW}Нажмите Enter для продолжения...${NC}"
+    read
 }
 
 # --- УДАЛЕНИЕ ПРОКСИ ---
@@ -142,7 +151,8 @@ remove_proxy() {
     echo -e "${RED}Удаление прокси...${NC}"
     docker stop "$CONTAINER_NAME" &>/dev/null && docker rm "$CONTAINER_NAME" &>/dev/null
     echo -e "${GREEN}Прокси удален${NC}"
-    read -p "$(echo -e ${YELLOW}Нажмите Enter...${NC})"
+    echo -ne "${YELLOW}Нажмите Enter...${NC}"
+    read
 }
 
 # --- ПЕРЕЗАПУСК ПРОКСИ ---
@@ -150,7 +160,8 @@ restart_proxy() {
     echo -e "${YELLOW}Перезапуск прокси...${NC}"
     docker restart "$CONTAINER_NAME" &>/dev/null
     echo -e "${GREEN}Готово${NC}"
-    read -p "$(echo -e ${YELLOW}Нажмите Enter...${NC})"
+    echo -ne "${YELLOW}Нажмите Enter...${NC}"
+    read
 }
 
 # --- ОСНОВНОЕ МЕНЮ ---
@@ -167,14 +178,16 @@ main_menu() {
         echo -e "${YELLOW}4)${NC} Удалить прокси"
         echo -e "${YELLOW}0)${NC} Выход"
         echo ""
-        read -p "$(echo -e ${YELLOW}Выберите действие: ${NC})" choice
+        echo -ne "${YELLOW}Выберите действие: ${NC}"
+        read choice
         
         case $choice in
             1) menu_install ;;
             2) 
                 clear
                 show_config
-                read -p "$(echo -e ${YELLOW}Нажмите Enter...${NC})"
+                echo -ne "${YELLOW}Нажмите Enter...${NC}"
+                read
                 ;;
             3) restart_proxy ;;
             4) remove_proxy ;;
@@ -184,7 +197,8 @@ main_menu() {
                 ;;
             *) 
                 echo -e "${RED}Неверный выбор${NC}"
-                read -p "$(echo -e ${YELLOW}Нажмите Enter...${NC})"
+                echo -ne "${YELLOW}Нажмите Enter...${NC}"
+                read
                 ;;
         esac
     done
