@@ -4,11 +4,15 @@
 ALIAS_NAME="gotelegram"
 BINARY_PATH="/usr/local/bin/gotelegram"
 
-# --- ЦВЕТА (минимально) ---
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m'
+
+
+YELLOW_CUSTOM='\033[38;2;249;241;165m'  # #f9f1a5
+BLUE_CUSTOM='\033[38;2;15;139;253m'     # #0f8bfd
+GREEN_CUSTOM='\033[38;2;22;255;0m'      # #16ff00
 
 # --- СИСТЕМНЫЕ ПРОВЕРКИ ---
 check_root() {
@@ -20,12 +24,12 @@ check_root() {
 
 install_deps() {
     if ! command -v docker &> /dev/null; then
-        echo "Установка Docker..."
+        echo -e "${YELLOW_CUSTOM}Установка Docker...${NC}"
         curl -fsSL https://get.docker.com | sh
         systemctl enable --now docker
     fi
     if ! command -v qrencode &> /dev/null; then
-        echo "Установка qrencode..."
+        echo -e "${YELLOW_CUSTOM}Установка qrencode...${NC}"
         apt-get update && apt-get install -y qrencode 2>/dev/null || yum install -y qrencode 2>/dev/null
     fi
     cp "$0" "$BINARY_PATH" && chmod +x "$BINARY_PATH"
@@ -46,29 +50,37 @@ show_config() {
     
     SECRET=$(docker inspect mtproto-proxy --format='{{range .Config.Cmd}}{{.}} {{end}}' | awk '{print $NF}')
     IP=$(get_ip)
-    PORT=$(docker inspect mtproto-proxy --format='{{(index (index .HostConfig.PortBindings (printf "%s/tcp" (index .Config.ExposedPorts 0))) 0).HostPort}}' 2>/dev/null)
+    
+    # Правильное получение порта
+    PORT=$(docker port mtproto-proxy 2>/dev/null | head -1 | grep -o '[0-9]*$')
+    if [ -z "$PORT" ]; then
+        # Fallback метод через inspect
+        PORT=$(docker inspect mtproto-proxy --format='{{range $p, $conf := .HostConfig.PortBindings}}{{(index $conf 0).HostPort}}{{end}}' 2>/dev/null)
+    fi
     PORT=${PORT:-443}
+    
     LINK="tg://proxy?server=$IP&port=$PORT&secret=$SECRET"
 
-    echo -e "\n${GREEN}=== ПОДКЛЮЧЕНИЕ К ПРОКСИ ===${NC}"
-    echo -e "IP:     $IP"
-    echo -e "Port:   $PORT"
-    echo -e "Secret: $SECRET"
-    echo -e "Link:   ${BLUE}$LINK${NC}"
-    echo -e "\n${GREEN}=== QR-код для подключения ===${NC}"
+    echo -e "\n${GREEN_CUSTOM}=== ПОДКЛЮЧЕНИЕ К ПРОКСИ ===${NC}"
+    echo -e "${YELLOW_CUSTOM}IP:     ${NC}$IP"
+    echo -e "${YELLOW_CUSTOM}Port:   ${NC}$PORT"
+    echo -e "${YELLOW_CUSTOM}Secret: ${NC}$SECRET"
+    echo -e "${YELLOW_CUSTOM}Link:   ${BLUE_CUSTOM}$LINK${NC}"
+    echo -e "\n${GREEN_CUSTOM}=== QR-код для подключения ===${NC}"
     qrencode -t ANSIUTF8 "$LINK"
 }
 
 # --- УСТАНОВКА ПРОКСИ ---
 install_proxy() {
     clear
-    echo -e "${GREEN}--- Установка MTProto прокси ---${NC}"
+    echo -e "${GREEN_CUSTOM}--- Установка MTProto прокси ---${NC}"
     
     # Выбор домена
-    echo -e "\nВыберите домен для маскировки (Fake TLS):"
+    echo -e "\n${YELLOW_CUSTOM}Выберите домен для маскировки (Fake TLS):${NC}"
     domains=(
         "google.com" "cloudflare.com" "github.com" "microsoft.com"
         "amazon.com" "apple.com" "telegram.org" "vk.com"
+        "yandex.ru" "yahoo.com" "bing.com" "duckduckgo.com"
     )
     
     for i in "${!domains[@]}"; do
@@ -76,30 +88,41 @@ install_proxy() {
     done
     echo "$((${#domains[@]}+1))) Свой вариант"
     
-    read -p "Выберите домен [1-${#domains[@]}]: " d_idx
+    read -p "$(echo -e ${YELLOW_CUSTOM}Выберите домен [1-${#domains[@]}]: ${NC})" d_idx
     
     if [ "$d_idx" -eq "$((${#domains[@]}+1))" ]; then
-        read -p "Введите домен: " DOMAIN
+        read -p "$(echo -e ${YELLOW_CUSTOM}Введите домен: ${NC})" DOMAIN
     else
         DOMAIN=${domains[$((d_idx-1))]}
     fi
     DOMAIN=${DOMAIN:-google.com}
 
     # Выбор порта
-    echo -e "\nВыберите порт:"
+    echo -e "\n${YELLOW_CUSTOM}Выберите порт:${NC}"
     echo "1) 443 (рекомендуется)"
     echo "2) 8443"
     echo "3) Свой порт"
-    read -p "Выбор: " p_choice
+    read -p "$(echo -e ${YELLOW_CUSTOM}Выбор: ${NC})" p_choice
     
     case $p_choice in
         2) PORT=8443 ;;
-        3) read -p "Введите порт: " PORT ;;
+        3) read -p "$(echo -e ${YELLOW_CUSTOM}Введите порт: ${NC})" PORT ;;
         *) PORT=443 ;;
     esac
 
+    # Проверка, не занят ли порт
+    if ss -tuln | grep -q ":$PORT "; then
+        echo -e "${RED}Внимание! Порт $PORT уже занят!${NC}"
+        read -p "$(echo -e ${YELLOW_CUSTOM}Продолжить всё равно? (y/n): ${NC})" force
+        if [ "$force" != "y" ]; then
+            echo -e "${YELLOW_CUSTOM}Отмена установки${NC}"
+            read -p "$(echo -e ${YELLOW_CUSTOM}Нажмите Enter...${NC})"
+            return
+        fi
+    fi
+
     # Установка
-    echo -e "\n${GREEN}Настройка прокси...${NC}"
+    echo -e "\n${GREEN_CUSTOM}Настройка прокси...${NC}"
     SECRET=$(docker run --rm nineseconds/mtg:2 generate-secret --hex "$DOMAIN")
     
     # Остановка старого контейнера если есть
@@ -115,13 +138,13 @@ install_proxy() {
         "$SECRET" > /dev/null
     
     if [ $? -eq 0 ]; then
-        echo -e "${GREEN}Прокси успешно установлен!${NC}"
+        echo -e "${GREEN_CUSTOM}Прокси успешно установлен!${NC}"
         show_config
     else
         echo -e "${RED}Ошибка при установке прокси${NC}"
     fi
     
-    read -p "Нажмите Enter для продолжения..."
+    read -p "$(echo -e ${YELLOW_CUSTOM}Нажмите Enter для продолжения...${NC})"
 }
 
 # --- УДАЛЕНИЕ ПРОКСИ ---
@@ -129,44 +152,47 @@ remove_proxy() {
     echo -e "${RED}Удаление прокси...${NC}"
     docker stop mtproto-proxy &>/dev/null
     docker rm mtproto-proxy &>/dev/null
-    echo -e "${GREEN}Прокси удален${NC}"
-    read -p "Нажмите Enter..."
+    echo -e "${GREEN_CUSTOM}Прокси удален${NC}"
+    read -p "$(echo -e ${YELLOW_CUSTOM}Нажмите Enter...${NC})"
 }
 
 # --- ОСНОВНОЕ МЕНЮ ---
 main_menu() {
     while true; do
         clear
-        echo -e "${GREEN}=== MTProto Proxy Manager ===${NC}"
-        echo "1) Установить прокси"
-        echo "2) Показать данные подключения"
-        echo "3) Перезапустить прокси"
-        echo "4) Удалить прокси"
-        echo "0) Выход"
+        echo -e "${GREEN_CUSTOM}╔════════════════════════════════╗${NC}"
+        echo -e "${GREEN_CUSTOM}║    MTProto Proxy Manager      ║${NC}"
+        echo -e "${GREEN_CUSTOM}╚════════════════════════════════╝${NC}"
         echo ""
-        read -p "Выберите действие: " choice
+        echo -e "${YELLOW_CUSTOM}1)${NC} Установить прокси (с обфускацией)"
+        echo -e "${YELLOW_CUSTOM}2)${NC} Показать данные подключения"
+        echo -e "${YELLOW_CUSTOM}3)${NC} Перезапустить прокси"
+        echo -e "${YELLOW_CUSTOM}4)${NC} Удалить прокси"
+        echo -e "${YELLOW_CUSTOM}0)${NC} Выход"
+        echo ""
+        read -p "$(echo -e ${YELLOW_CUSTOM}Выберите действие: ${NC})" choice
         
         case $choice in
             1) install_proxy ;;
             2) 
                 clear
                 show_config
-                read -p "Нажмите Enter..."
+                read -p "$(echo -e ${YELLOW_CUSTOM}Нажмите Enter...${NC})"
                 ;;
             3)
-                echo "Перезапуск прокси..."
+                echo -e "${YELLOW_CUSTOM}Перезапуск прокси...${NC}"
                 docker restart mtproto-proxy &>/dev/null
-                echo -e "${GREEN}Готово${NC}"
-                read -p "Нажмите Enter..."
+                echo -e "${GREEN_CUSTOM}Готово${NC}"
+                read -p "$(echo -e ${YELLOW_CUSTOM}Нажмите Enter...${NC})"
                 ;;
             4) remove_proxy ;;
             0) 
-                echo "Выход"
+                echo -e "${YELLOW_CUSTOM}Выход${NC}"
                 exit 0 
                 ;;
             *) 
                 echo -e "${RED}Неверный выбор${NC}"
-                read -p "Нажмите Enter..."
+                read -p "$(echo -e ${YELLOW_CUSTOM}Нажмите Enter...${NC})"
                 ;;
         esac
     done
